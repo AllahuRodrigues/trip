@@ -15,12 +15,15 @@
     "@nestjs/platform-socket.io": "^10.4.15",
     "@nestjs/serve-static": "^4.0.2",
     "@nestjs/websockets": "^10.4.15",
+    "@upstash/redis": "^1.34.3",
+    "express": "^4.21.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
   },
   "devDependencies": {
+    "@vercel/node": "^3.2.29",
     "@nestjs/cli": "^10.4.9",
     "@nestjs/schematics": "^10.2.3",
     "@types/express": "^5.0.0",

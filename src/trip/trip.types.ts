@@ -16,6 +16,8 @@ export interface MustDoItem {
   dayHint?: string;
   notes?: string;
   completed: boolean;
+  /** Rough quote for this experience (EUR). */
+  estimatedCost?: number;
 }
 
 export interface TripDay {
@@ -55,4 +57,6 @@ export interface TripDocument {
   itineraryDays: TripDay[];
   options: TripOptions;
   notes: string;
+  /** Set by server on save (ISO timestamp). */
+  updatedAt?: string;
 }

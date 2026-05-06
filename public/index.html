@@ -191,6 +191,52 @@
       vertical-align: top;
     }
     table.budget th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    table.breakdown {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+    table.breakdown td {
+      padding: 0.35rem 0.25rem;
+      border-bottom: 1px dashed var(--line);
+      vertical-align: top;
+    }
+    table.breakdown td:last-child {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--sea);
+    }
+    table.breakdown tr.section td {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      padding-top: 0.85rem;
+      border-bottom: none;
+    }
+    table.breakdown tr.total td {
+      font-weight: 600;
+      border-top: 2px solid var(--line);
+      border-bottom: none;
+      padding-top: 0.65rem;
+    }
+    table.breakdown tr.total td:last-child {
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+    .deploy-hint {
+      background: rgba(196, 92, 62, 0.08);
+      border: 1px solid rgba(196, 92, 62, 0.25);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      font-size: 0.88rem;
+      color: var(--ink);
+      margin-top: 1rem;
+      display: none;
+    }
     .must-grid {
       display: grid;
       gap: 0.85rem;
@@ -316,6 +362,18 @@
       </div>
       <div class="budget-bar"><span id="budgetFill" style="width:0%"></span></div>
       <p class="budget-hint" id="budgetHint"></p>
+
+      <h3 style="font-family:DM Serif Display,Georgia,serif;font-weight:400;font-size:1.15rem;margin:1.25rem 0 0.35rem;">Full price picture</h3>
+      <p class="hint" style="margin:0 0 0.5rem;">Every line item listed below — combined total may double-count if the same cost appears in more than one column.</p>
+      <table class="breakdown" aria-label="Price breakdown">
+        <tbody id="priceBreakdownBody"></tbody>
+      </table>
+
+      <div id="deployHint" class="deploy-hint" role="note">
+        <strong>Vercel hosting:</strong> add free <strong>Upstash Redis</strong> and set <code style="font-size:0.82rem;">UPSTASH_REDIS_REST_URL</code> and <code style="font-size:0.82rem;">UPSTASH_REDIS_REST_TOKEN</code> in this project’s Environment Variables so the shared trip saves for everyone. Without Redis, edits can reset when the function scales.
+      </div>
+
+      <h3 style="font-family:DM Serif Display,Georgia,serif;font-weight:400;font-size:1.15rem;margin:1.25rem 0 0.35rem;">Expense ledger</h3>
       <table class="budget">
         <thead>
           <tr>
@@ -389,7 +447,9 @@
       <span class="hint" id="saveStatus"></span>
     </div>
 
-    <footer class="note">Share this page URL with Yumna — everyone sees edits in near real time.</footer>
+    <footer class="note">
+      Share this URL — both of you can edit the same trip. Live updates use sockets on your own server, or short polling on Vercel.
+    </footer>
   </div>
 
   <script>
@@ -397,8 +457,11 @@
   const API = "/api/trip";
   let trip = null;
   let saving = false;
+  let dirty = false;
+  let serverRev = null;
   let socket = null;
   let debounceTimer = null;
+  let pollTimer = null;
 
   function uuid() {
     return crypto.randomUUID();
@@ -423,6 +486,10 @@
 
   function sumEstimatedDays(days) {
     return days.reduce((s, d) => s + (Number(d.estimatedSpend) || 0), 0);
+  }
+
+  function sumMustDosCost(mustDos) {
+    return mustDos.reduce((s, m) => s + (Number(m.estimatedCost) || 0), 0);
   }
 
   function gatherTripFromDom() {
@@ -456,6 +523,7 @@
       m.completed = card.querySelector(".m-done").checked;
       m.title = card.querySelector(".m-title").value;
       m.dayHint = card.querySelector(".m-hint").value;
+      m.estimatedCost = Number(card.querySelector(".m-cost").value) || 0;
       m.notes = card.querySelector(".m-notes").value;
     });
 
@@ -477,25 +545,111 @@
     return t;
   }
 
-  function renderBudgetMeta(t) {
-    const tracked = sumBudgetItems(t.budget.items);
-    const estDays = sumEstimatedDays(t.itineraryDays);
-    const total = t.budget.total || 1;
-    document.getElementById("budgetTracked").textContent =
-      "€" + tracked.toFixed(0) + " lines · ~€" + estDays.toFixed(0) + " day estimates";
+  function fmtEUR(n) {
+    return "€" + Math.round(Number(n) || 0).toLocaleString();
+  }
 
-    const pct = Math.min(100, (tracked / total) * 100);
+  function renderPriceBreakdown(t) {
+    const body = document.getElementById("priceBreakdownBody");
+    const A = sumBudgetItems(t.budget.items);
+    const B = sumEstimatedDays(t.itineraryDays);
+    const C = sumMustDosCost(t.mustDos);
+    const rawCombined = A + B + C;
+    const smartCombined = Math.max(A, B) + C;
+
+    let rows = "";
+    rows += '<tr class="section"><td colspan="2">Expense ledger lines</td></tr>';
+    if (!t.budget.items.length) {
+      rows +=
+        '<tr><td colspan="2"><span class="hint">No lines yet — add flights, food, skydiving deposits…</span></td></tr>';
+    }
+    t.budget.items.forEach((it) => {
+      rows +=
+        "<tr><td>" +
+        escapeHtml(it.label || "—") +
+        (it.notes ? '<br/><span class="hint">' + escapeHtml(it.notes) + "</span>" : "") +
+        "</td><td>" +
+        fmtEUR(it.amount) +
+        "</td></tr>";
+    });
+    rows += "<tr><td><strong>Subtotal ledger</strong></td><td>" + fmtEUR(A) + "</td></tr>";
+
+    rows += '<tr class="section"><td colspan="2">Daily envelopes (estimated)</td></tr>';
+    t.itineraryDays.forEach((d, i) => {
+      rows +=
+        "<tr><td>Day " +
+        (i + 1) +
+        " · " +
+        escapeHtml(d.title || "") +
+        '<br/><span class="hint">' +
+        escapeHtml(d.date) +
+        "</span></td><td>" +
+        fmtEUR(d.estimatedSpend) +
+        "</td></tr>";
+    });
+    rows += "<tr><td><strong>Subtotal days</strong></td><td>" + fmtEUR(B) + "</td></tr>";
+
+    rows += '<tr class="section"><td colspan="2">Must-do quotes (rough)</td></tr>';
+    t.mustDos.forEach((m) => {
+      rows +=
+        "<tr><td>" +
+        escapeHtml(m.title || "") +
+        (m.notes ? '<br/><span class="hint">' + escapeHtml(m.notes) + "</span>" : "") +
+        "</td><td>" +
+        fmtEUR(m.estimatedCost || 0) +
+        "</td></tr>";
+    });
+    rows += "<tr><td><strong>Subtotal must-dos</strong></td><td>" + fmtEUR(C) + "</td></tr>";
+
+    rows +=
+      '<tr class="total"><td>Raw combined (A + B + C)</td><td>' +
+      fmtEUR(rawCombined) +
+      "</td></tr>";
+    rows +=
+      '<tr class="total"><td>Suggested planning figure max(A,B) + C</td><td>' +
+      fmtEUR(smartCombined) +
+      "</td></tr>";
+
+    body.innerHTML = rows;
+  }
+
+  function renderBudgetMeta(t) {
+    const A = sumBudgetItems(t.budget.items);
+    const B = sumEstimatedDays(t.itineraryDays);
+    const C = sumMustDosCost(t.mustDos);
+    const smartCombined = Math.max(A, B) + C;
+    const totalCap = t.budget.total || 1;
+
+    document.getElementById("budgetTracked").textContent =
+      fmtEUR(A) +
+      " ledger · " +
+      fmtEUR(B) +
+      " day envelopes · " +
+      fmtEUR(C) +
+      " must-do quotes · planning ≈ " +
+      fmtEUR(smartCombined);
+
+    const pct = Math.min(100, (smartCombined / totalCap) * 100);
     document.getElementById("budgetFill").style.width = pct + "%";
 
     const hintEl = document.getElementById("budgetHint");
-    if (tracked > total) {
-      hintEl.textContent = "Expense lines exceed the €" + total + " cap — tweak amounts or the total.";
+    if (smartCombined > totalCap) {
+      hintEl.textContent =
+        "Planning figure (~" +
+        fmtEUR(smartCombined) +
+        ") is above your €" +
+        totalCap +
+        " cap — trim ledger lines, day envelopes, or quotes.";
       hintEl.classList.add("warn");
     } else {
       hintEl.textContent =
-        "€" + (total - tracked).toFixed(0) + " left across tracked lines (excluding blank estimates).";
+        "About " +
+        fmtEUR(totalCap - smartCombined) +
+        " headroom against the cap using the planning figure (max ledger vs days + must-dos).";
       hintEl.classList.remove("warn");
     }
+
+    renderPriceBreakdown(t);
   }
 
   function render() {
@@ -570,7 +724,9 @@
         escapeAttr(m.title) +
         '" style="font-weight:600;border:none;padding:0;background:transparent;width:100%;" /><p class="hint">Day-trip idea</p><textarea class="m-hint" style="min-height:42px;margin-top:0.35rem;">' +
         escapeHtml(m.dayHint || "") +
-        '</textarea><textarea class="m-notes" placeholder="Extra notes…" style="min-height:48px;margin-top:0.5rem;">' +
+        '</textarea><label class="lbl" style="margin-top:0.5rem;">Quoted € (rough)</label><input type="number" class="m-cost" min="0" step="5" value="' +
+        escapeAttr(String(m.estimatedCost ?? 0)) +
+        '" /><textarea class="m-notes" placeholder="Extra notes…" style="min-height:48px;margin-top:0.5rem;">' +
         escapeHtml(m.notes || "") +
         "</textarea></div></header>";
       mustRoot.appendChild(div);
@@ -656,7 +812,7 @@
     document.querySelectorAll(".b-label, .b-amt, .b-notes").forEach((el) => {
       el.oninput = scheduleSave;
     });
-    document.querySelectorAll(".m-done, .m-title, .m-hint, .m-notes").forEach((el) => {
+    document.querySelectorAll(".m-done, .m-title, .m-hint, .m-cost, .m-notes").forEach((el) => {
       el.oninput = scheduleSave;
       el.onchange = scheduleSave;
     });
@@ -682,6 +838,8 @@
       });
       if (!res.ok) throw new Error(await res.text());
       trip = await res.json();
+      dirty = false;
+      serverRev = trip.updatedAt ?? null;
       document.getElementById("saveStatus").textContent = showToast ? "Saved." : "";
       document.getElementById("tripTitle").textContent = trip.title;
     } catch (e) {
@@ -697,6 +855,7 @@
   }
 
   function scheduleSave() {
+    dirty = true;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => persist(false), 550);
   }
@@ -723,20 +882,95 @@
 
   document.getElementById("saveBtn").onclick = () => persist(true);
 
-  function connectSocket() {
-    socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
+  function applyRemoteIfNewer(remote) {
+    if (saving || dirty) return;
+    if (!trip || !remote) return;
+    const next = remote.updatedAt || "";
+    const cur = serverRev || "";
+    if (next && cur && next.localeCompare(cur) <= 0) return;
+    trip = remote;
+    serverRev = trip.updatedAt ?? null;
+    render();
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
     const live = document.getElementById("livePill");
+    live.textContent = "Sync · refreshed every few seconds";
+    live.setAttribute("data-on", "true");
+    pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(API);
+        if (!res.ok) return;
+        const remote = await res.json();
+        applyRemoteIfNewer(remote);
+      } catch (_) {}
+    }, 5000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function connectLiveSync() {
+    const live = document.getElementById("livePill");
+    const host = location.hostname;
+    const vercelHost = host.endsWith(".vercel.app") || host.includes("vercel.app");
+
+    if (vercelHost) {
+      const hint = document.getElementById("deployHint");
+      if (hint) hint.style.display = "block";
+      startPolling();
+      return;
+    }
+
+    if (typeof io === "undefined") {
+      startPolling();
+      return;
+    }
+
+    socket = io({
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      timeout: 4500,
+      reconnection: true,
+    });
+
+    const tmr = setTimeout(() => {
+      if (!socket.connected) {
+        live.textContent = "Sync · polling (socket unavailable)";
+        live.setAttribute("data-on", "true");
+        startPolling();
+      }
+    }, 5000);
+
     socket.on("connect", () => {
-      live.textContent = "Live sync · connected";
+      clearTimeout(tmr);
+      stopPolling();
+      live.textContent = "Live sync · sockets";
       live.setAttribute("data-on", "true");
     });
+
     socket.on("disconnect", () => {
-      live.textContent = "Live sync · offline";
+      live.textContent = "Live sync · reconnecting…";
       live.setAttribute("data-on", "false");
+      startPolling();
     });
+
+    socket.on("connect_error", () => {
+      clearTimeout(tmr);
+      live.textContent = "Sync · polling";
+      live.setAttribute("data-on", "true");
+      startPolling();
+    });
+
     socket.on("trip:updated", (remote) => {
-      if (saving) return;
+      if (saving || dirty) return;
       trip = remote;
+      serverRev = trip.updatedAt ?? null;
       render();
     });
   }
@@ -748,8 +982,10 @@
       return;
     }
     trip = await res.json();
+    serverRev = trip.updatedAt ?? null;
+    dirty = false;
     render();
-    connectSocket();
+    connectLiveSync();
   }
 
   init();

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import type { TripDocument } from './trip.types';
+import type { TripNotifier } from './trip-notifier';
 import { TripService } from './trip.service';
 
 const corsOrigin = process.env.CLIENT_ORIGIN ?? '*';
@@ -13,7 +14,7 @@ const corsOrigin = process.env.CLIENT_ORIGIN ?? '*';
   cors: { origin: corsOrigin === '*' ? true : corsOrigin.split(',').map((s) => s.trim()) },
   transports: ['websocket', 'polling'],
 })
-export class TripGateway implements OnGatewayConnection {
+export class TripGateway implements OnGatewayConnection, TripNotifier {
   @WebSocketServer()
   server!: Server;
 

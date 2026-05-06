@@ -6,11 +6,15 @@ import { TripModule } from './trip/trip.module';
 @Module({
   imports: [
     TripModule,
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
-      serveRoot: '/',
-      exclude: ['/api/(.*)'],
-    }),
+    ...(process.env.VERCEL
+      ? []
+      : [
+          ServeStaticModule.forRoot({
+            rootPath: join(__dirname, '..', 'public'),
+            serveRoot: '/',
+            exclude: ['/api/(.*)'],
+          }),
+        ]),
   ],
 })
 export class AppModule {}
