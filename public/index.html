@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rodrigues & Yumna — Portugal Trip</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --ink: #1a1814;
+      --paper: #f6f1e8;
+      --accent: #c45c3e;
+      --sea: #2d5a5a;
+      --muted: #6b645a;
+      --card: #fffdf8;
+      --line: rgba(26, 24, 20, 0.12);
+      --radius: 14px;
+      --shadow: 0 18px 40px rgba(26, 24, 20, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Outfit", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(196, 92, 62, 0.15), transparent),
+        radial-gradient(800px 400px at 100% 20%, rgba(45, 90, 90, 0.12), transparent),
+        var(--paper);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    header.hero {
+      margin-bottom: 2rem;
+    }
+    header.hero h1 {
+      font-family: "DM Serif Display", Georgia, serif;
+      font-weight: 400;
+      font-size: clamp(2rem, 5vw, 2.75rem);
+      margin: 0 0 0.35rem;
+      letter-spacing: -0.02em;
+    }
+    header.hero .sub {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 1.05rem;
+      margin: 0;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      background: rgba(45, 90, 90, 0.1);
+      color: var(--sea);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .pill.live {
+      background: rgba(196, 92, 62, 0.12);
+      color: var(--accent);
+    }
+    .pill.live[data-on="false"] { opacity: 0.55; }
+    section.panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--line);
+      padding: 1.35rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    section.panel h2 {
+      font-family: "DM Serif Display", Georgia, serif;
+      font-weight: 400;
+      font-size: 1.35rem;
+      margin: 0 0 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    label.lbl {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    textarea,
+    select {
+      width: 100%;
+      font: inherit;
+      padding: 0.55rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    .grid-2 {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    .btn {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      padding: 0.55rem 1rem;
+      font-weight: 500;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 6px 16px rgba(196, 92, 62, 0.35);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--sea);
+      border: 1px solid rgba(45, 90, 90, 0.35);
+    }
+    .btn-danger {
+      background: transparent;
+      color: #a33;
+      border: 1px dashed rgba(170, 51, 51, 0.45);
+      padding: 0.35rem 0.65rem;
+      font-size: 0.85rem;
+    }
+    .row-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .budget-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(45, 90, 90, 0.15);
+      overflow: hidden;
+      margin: 0.75rem 0 0.25rem;
+    }
+    .budget-bar > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--sea), var(--accent));
+      border-radius: inherit;
+      transition: width 0.35s ease;
+    }
+    .budget-hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0;
+    }
+    .budget-hint.warn { color: var(--accent); font-weight: 500; }
+    table.budget {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin-top: 0.75rem;
+    }
+    table.budget th,
+    table.budget td {
+      text-align: left;
+      padding: 0.45rem 0.35rem;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    table.budget th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .must-grid {
+      display: grid;
+      gap: 0.85rem;
+    }
+    .must-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      background: rgba(255, 255, 255, 0.65);
+    }
+    .must-card header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      margin-bottom: 0.35rem;
+    }
+    .must-card header input[type="checkbox"] {
+      width: 1.15rem;
+      height: 1.15rem;
+      margin-top: 0.2rem;
+      accent-color: var(--sea);
+    }
+    .must-card strong { font-weight: 600; font-size: 1rem; }
+    .hint { font-size: 0.82rem; color: var(--muted); margin: 0.15rem 0 0; }
+    .days {
+      display: grid;
+      gap: 1rem;
+    }
+    .day-card {
+      border-left: 4px solid var(--accent);
+      padding-left: 1rem;
+    }
+    .day-card h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+    .travelers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-top: 0.35rem;
+    }
+    .travelers span {
+      background: rgba(45, 90, 90, 0.08);
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .travelers button.x {
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+    }
+    footer.note {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 2rem;
+    }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1 id="tripTitle">Loading…</h1>
+      <p class="sub" id="tripSubtitle"></p>
+      <div class="meta-row">
+        <span class="pill" id="datesPill"></span>
+        <span class="pill live" id="livePill" data-on="false">Live sync · connecting…</span>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Trip overview</h2>
+      <div class="grid-2">
+        <div>
+          <label class="lbl" for="titleInput">Title</label>
+          <input type="text" id="titleInput" autocomplete="off" />
+        </div>
+        <div>
+          <label class="lbl" for="subtitleInput">Subtitle</label>
+          <input type="text" id="subtitleInput" autocomplete="off" />
+        </div>
+        <div>
+          <label class="lbl" for="departureInput">Leaving SF</label>
+          <input type="text" id="departureInput" />
+        </div>
+        <div>
+          <label class="lbl" for="startCityInput">Start city</label>
+          <input type="text" id="startCityInput" />
+        </div>
+      </div>
+      <div style="margin-top: 1rem;">
+        <label class="lbl" for="notesInput">Shared notes</label>
+        <textarea id="notesInput"></textarea>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        Budget
+        <button type="button" class="btn btn-ghost" id="addBudgetBtn">+ Expense line</button>
+      </h2>
+      <div class="grid-2">
+        <div>
+          <label class="lbl" for="budgetTotal">Total budget (EUR)</label>
+          <input type="number" id="budgetTotal" min="0" step="1" />
+        </div>
+        <div>
+          <label class="lbl">Tracked spend</label>
+          <p id="budgetTracked" style="margin:0;font-size:1.25rem;font-weight:600;color:var(--sea);">€0</p>
+        </div>
+      </div>
+      <div class="budget-bar"><span id="budgetFill" style="width:0%"></span></div>
+      <p class="budget-hint" id="budgetHint"></p>
+      <table class="budget">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th style="width:110px;">€</th>
+            <th>Notes</th>
+            <th style="width:72px;"></th>
+          </tr>
+        </thead>
+        <tbody id="budgetBody"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Must-do experiences</h2>
+      <p class="hint" style="margin:-0.5rem 0 1rem;">Skydiving, bars, beach as day trips · boat & dinner as its own date.</p>
+      <div class="must-grid" id="mustDosRoot"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Optional logistics</h2>
+      <div class="grid-2">
+        <div>
+          <label class="lbl" for="optAirbnb">Airbnb / lodging focus</label>
+          <select id="optAirbnb">
+            <option value="">Undecided</option>
+            <option value="yes">Considering</option>
+            <option value="no">Probably not</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl" for="optCar">Car / road trip</label>
+          <select id="optCar">
+            <option value="">Undecided</option>
+            <option value="yes">Considering</option>
+            <option value="no">Probably not</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:1rem;">
+        <label class="lbl" for="lodgingNotes">Lodging notes</label>
+        <textarea id="lodgingNotes"></textarea>
+      </div>
+      <div style="margin-top:1rem;">
+        <label class="lbl" for="transportNotes">Transport notes</label>
+        <textarea id="transportNotes"></textarea>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Daily plan · Lisbon week</h2>
+      <div class="days" id="daysRoot"></div>
+    </section>
+
+    <section class="panel">
+      <h2>
+        Travelers
+        <button type="button" class="btn btn-ghost" id="addTravelerBtn">+ Add name</button>
+      </h2>
+      <div class="travelers" id="travelersRoot"></div>
+      <div class="grid-2" style="margin-top:1rem;">
+        <div>
+          <label class="lbl" for="newTraveler">New traveler</label>
+          <input type="text" id="newTraveler" placeholder="Name" />
+        </div>
+      </div>
+    </section>
+
+    <div class="row-actions">
+      <button type="button" class="btn btn-primary" id="saveBtn">Save now</button>
+      <span class="hint" id="saveStatus"></span>
+    </div>
+
+    <footer class="note">Share this page URL with Yumna — everyone sees edits in near real time.</footer>
+  </div>
+
+  <script>
+(function () {
+  const API = "/api/trip";
+  let trip = null;
+  let saving = false;
+  let socket = null;
+  let debounceTimer = null;
+
+  function uuid() {
+    return crypto.randomUUID();
+  }
+
+  function selTriState(val) {
+    if (val === true || val === "yes") return "yes";
+    if (val === false || val === "no") return "no";
+    return "";
+  }
+
+  function triFromSelect(el) {
+    const v = el.value;
+    if (v === "yes") return true;
+    if (v === "no") return false;
+    return null;
+  }
+
+  function sumBudgetItems(items) {
+    return items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  }
+
+  function sumEstimatedDays(days) {
+    return days.reduce((s, d) => s + (Number(d.estimatedSpend) || 0), 0);
+  }
+
+  function gatherTripFromDom() {
+    const t = structuredClone(trip);
+    t.title = document.getElementById("titleInput").value.trim();
+    t.subtitle = document.getElementById("subtitleInput").value.trim();
+    t.departureFrom = document.getElementById("departureInput").value.trim();
+    t.startCity = document.getElementById("startCityInput").value.trim();
+    t.notes = document.getElementById("notesInput").value;
+
+    t.budget.total = Number(document.getElementById("budgetTotal").value) || 0;
+
+    t.options.airbnbInterested = triFromSelect(document.getElementById("optAirbnb"));
+    t.options.carRoadTripInterested = triFromSelect(document.getElementById("optCar"));
+    t.options.lodgingNotes = document.getElementById("lodgingNotes").value;
+    t.options.transportNotes = document.getElementById("transportNotes").value;
+
+    document.querySelectorAll("[data-budget-id]").forEach((row) => {
+      const id = row.getAttribute("data-budget-id");
+      const item = t.budget.items.find((x) => x.id === id);
+      if (!item) return;
+      item.label = row.querySelector(".b-label").value;
+      item.amount = Number(row.querySelector(".b-amt").value) || 0;
+      item.notes = row.querySelector(".b-notes").value;
+    });
+
+    document.querySelectorAll("[data-must-id]").forEach((card) => {
+      const id = card.getAttribute("data-must-id");
+      const m = t.mustDos.find((x) => x.id === id);
+      if (!m) return;
+      m.completed = card.querySelector(".m-done").checked;
+      m.title = card.querySelector(".m-title").value;
+      m.dayHint = card.querySelector(".m-hint").value;
+      m.notes = card.querySelector(".m-notes").value;
+    });
+
+    document.querySelectorAll("[data-day-id]").forEach((block) => {
+      const id = block.getAttribute("data-day-id");
+      const d = t.itineraryDays.find((x) => x.id === id);
+      if (!d) return;
+      d.date = block.querySelector(".d-date").value;
+      d.title = block.querySelector(".d-title").value;
+      d.plans = block.querySelector(".d-plans").value;
+      d.estimatedSpend = Number(block.querySelector(".d-spend").value) || 0;
+    });
+
+    t.travelers = [...document.querySelectorAll("[data-traveler-id]")].map((el) => ({
+      id: el.getAttribute("data-traveler-id"),
+      name: el.querySelector(".t-name").value.trim() || "Traveler",
+    }));
+
+    return t;
+  }
+
+  function renderBudgetMeta(t) {
+    const tracked = sumBudgetItems(t.budget.items);
+    const estDays = sumEstimatedDays(t.itineraryDays);
+    const total = t.budget.total || 1;
+    document.getElementById("budgetTracked").textContent =
+      "€" + tracked.toFixed(0) + " lines · ~€" + estDays.toFixed(0) + " day estimates";
+
+    const pct = Math.min(100, (tracked / total) * 100);
+    document.getElementById("budgetFill").style.width = pct + "%";
+
+    const hintEl = document.getElementById("budgetHint");
+    if (tracked > total) {
+      hintEl.textContent = "Expense lines exceed the €" + total + " cap — tweak amounts or the total.";
+      hintEl.classList.add("warn");
+    } else {
+      hintEl.textContent =
+        "€" + (total - tracked).toFixed(0) + " left across tracked lines (excluding blank estimates).";
+      hintEl.classList.remove("warn");
+    }
+  }
+
+  function render() {
+    if (!trip) return;
+    const t = trip;
+
+    document.getElementById("tripTitle").textContent = t.title;
+    document.getElementById("tripSubtitle").textContent = t.subtitle;
+    document.getElementById("datesPill").textContent =
+      "SF → " +
+      t.dates.leaveSf +
+      " · Portugal " +
+      t.dates.arrivePortugal +
+      " → " +
+      t.dates.lastDayPortugal +
+      " (" +
+      t.dates.dayCount +
+      " days)";
+
+    document.getElementById("titleInput").value = t.title;
+    document.getElementById("subtitleInput").value = t.subtitle;
+    document.getElementById("departureInput").value = t.departureFrom;
+    document.getElementById("startCityInput").value = t.startCity;
+    document.getElementById("notesInput").value = t.notes || "";
+
+    document.getElementById("budgetTotal").value = String(t.budget.total);
+
+    document.getElementById("optAirbnb").value = selTriState(t.options.airbnbInterested);
+    document.getElementById("optCar").value = selTriState(t.options.carRoadTripInterested);
+    document.getElementById("lodgingNotes").value = t.options.lodgingNotes || "";
+    document.getElementById("transportNotes").value = t.options.transportNotes || "";
+
+    const bb = document.getElementById("budgetBody");
+    bb.innerHTML = "";
+    t.budget.items.forEach((item) => {
+      const tr = document.createElement("tr");
+      tr.setAttribute("data-budget-id", item.id);
+      tr.innerHTML =
+        '<td><input class="b-label" type="text" value="' +
+        escapeAttr(item.label) +
+        '" /></td>' +
+        '<td><input class="b-amt" type="number" min="0" step="1" value="' +
+        escapeAttr(String(item.amount)) +
+        '" /></td>' +
+        '<td><input class="b-notes" type="text" value="' +
+        escapeAttr(item.notes || "") +
+        '" /></td>' +
+        '<td><button type="button" class="btn-danger budget-del">Remove</button></td>';
+      bb.appendChild(tr);
+    });
+
+    bb.querySelectorAll(".budget-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("tr");
+        const id = row.getAttribute("data-budget-id");
+        trip.budget.items = trip.budget.items.filter((x) => x.id !== id);
+        scheduleSave();
+        render();
+      });
+    });
+
+    const mustRoot = document.getElementById("mustDosRoot");
+    mustRoot.innerHTML = "";
+    t.mustDos.forEach((m) => {
+      const div = document.createElement("div");
+      div.className = "must-card";
+      div.setAttribute("data-must-id", m.id);
+      div.innerHTML =
+        '<header><input type="checkbox" class="m-done"' +
+        (m.completed ? " checked" : "") +
+        ' /><div style="flex:1;"><input type="text" class="m-title" value="' +
+        escapeAttr(m.title) +
+        '" style="font-weight:600;border:none;padding:0;background:transparent;width:100%;" /><p class="hint">Day-trip idea</p><textarea class="m-hint" style="min-height:42px;margin-top:0.35rem;">' +
+        escapeHtml(m.dayHint || "") +
+        '</textarea><textarea class="m-notes" placeholder="Extra notes…" style="min-height:48px;margin-top:0.5rem;">' +
+        escapeHtml(m.notes || "") +
+        "</textarea></div></header>";
+      mustRoot.appendChild(div);
+    });
+
+    const daysRoot = document.getElementById("daysRoot");
+    daysRoot.innerHTML = "";
+    t.itineraryDays.forEach((d, idx) => {
+      const div = document.createElement("div");
+      div.className = "day-card";
+      div.setAttribute("data-day-id", d.id);
+      div.innerHTML =
+        '<h3>Day ' +
+        (idx + 1) +
+        '</h3><div class="grid-2"><div><label class="lbl">Date</label><input type="date" class="d-date" value="' +
+        escapeAttr(d.date) +
+        '" /></div><div><label class="lbl">Day title</label><input type="text" class="d-title" value="' +
+        escapeAttr(d.title) +
+        '" /></div></div><div style="margin-top:0.75rem;"><label class="lbl">Plans</label><textarea class="d-plans">' +
+        escapeHtml(d.plans) +
+        '</textarea></div><div style="margin-top:0.75rem;"><label class="lbl">Estimated spend (€)</label><input type="number" class="d-spend" min="0" step="5" value="' +
+        escapeAttr(String(d.estimatedSpend)) +
+        '" /></div>';
+      daysRoot.appendChild(div);
+    });
+
+    const tv = document.getElementById("travelersRoot");
+    tv.innerHTML = "";
+    t.travelers.forEach((tr) => {
+      const span = document.createElement("span");
+      span.setAttribute("data-traveler-id", tr.id);
+      span.innerHTML =
+        '<input type="text" class="t-name" value="' +
+        escapeAttr(tr.name) +
+        '" style="border:none;background:transparent;max-width:140px;" />' +
+        '<button type="button" class="x" title="Remove">&times;</button>';
+      tv.appendChild(span);
+    });
+
+    tv.querySelectorAll(".x").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.closest("[data-traveler-id]").getAttribute("data-traveler-id");
+        trip.travelers = trip.travelers.filter((x) => x.id !== id);
+        scheduleSave();
+        render();
+      });
+    });
+
+    renderBudgetMeta(t);
+    wireInputs();
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/"/g, "&quot;");
+  }
+
+  function wireInputs() {
+    const ids = [
+      "titleInput",
+      "subtitleInput",
+      "departureInput",
+      "startCityInput",
+      "notesInput",
+      "budgetTotal",
+      "optAirbnb",
+      "optCar",
+      "lodgingNotes",
+      "transportNotes",
+    ];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      el.oninput = scheduleSave;
+      el.onchange = scheduleSave;
+    });
+
+    document.querySelectorAll(".b-label, .b-amt, .b-notes").forEach((el) => {
+      el.oninput = scheduleSave;
+    });
+    document.querySelectorAll(".m-done, .m-title, .m-hint, .m-notes").forEach((el) => {
+      el.oninput = scheduleSave;
+      el.onchange = scheduleSave;
+    });
+    document.querySelectorAll(".d-date, .d-title, .d-plans, .d-spend").forEach((el) => {
+      el.oninput = scheduleSave;
+      el.onchange = scheduleSave;
+    });
+    document.querySelectorAll(".t-name").forEach((el) => {
+      el.oninput = scheduleSave;
+    });
+  }
+
+  async function persist(showToast) {
+    if (!trip) return;
+    saving = true;
+    document.getElementById("saveStatus").textContent = showToast ? "Saving…" : "";
+    const payload = gatherTripFromDom();
+    try {
+      const res = await fetch(API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      trip = await res.json();
+      document.getElementById("saveStatus").textContent = showToast ? "Saved." : "";
+      document.getElementById("tripTitle").textContent = trip.title;
+    } catch (e) {
+      console.error(e);
+      document.getElementById("saveStatus").textContent = "Save failed — try again.";
+    } finally {
+      saving = false;
+      setTimeout(() => {
+        const st = document.getElementById("saveStatus");
+        if (st.textContent === "Saved.") st.textContent = "";
+      }, 2000);
+    }
+  }
+
+  function scheduleSave() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => persist(false), 550);
+  }
+
+  document.getElementById("addBudgetBtn").onclick = () => {
+    trip.budget.items.push({
+      id: uuid(),
+      label: "New expense",
+      amount: 0,
+      notes: "",
+    });
+    scheduleSave();
+    render();
+  };
+
+  document.getElementById("addTravelerBtn").onclick = () => {
+    const name = document.getElementById("newTraveler").value.trim();
+    if (!name) return;
+    trip.travelers.push({ id: uuid(), name });
+    document.getElementById("newTraveler").value = "";
+    scheduleSave();
+    render();
+  };
+
+  document.getElementById("saveBtn").onclick = () => persist(true);
+
+  function connectSocket() {
+    socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
+    const live = document.getElementById("livePill");
+    socket.on("connect", () => {
+      live.textContent = "Live sync · connected";
+      live.setAttribute("data-on", "true");
+    });
+    socket.on("disconnect", () => {
+      live.textContent = "Live sync · offline";
+      live.setAttribute("data-on", "false");
+    });
+    socket.on("trip:updated", (remote) => {
+      if (saving) return;
+      trip = remote;
+      render();
+    });
+  }
+
+  async function init() {
+    const res = await fetch(API);
+    if (!res.ok) {
+      document.getElementById("tripTitle").textContent = "Could not load trip";
+      return;
+    }
+    trip = await res.json();
+    render();
+    connectSocket();
+  }
+
+  init();
+})();
+  </script>
+</body>
+</html>
